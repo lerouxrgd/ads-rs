@@ -1,0 +1,7 @@
+book/src/*
+!book/src/*.c
+!book/src/*.h
+
+/target
+**/*.rs.bk
+Cargo.lock
