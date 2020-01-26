@@ -1,4 +1,4 @@
-pub struct List<T> {
+pub struct Stack<T> {
     head: Link<T>,
 }
 
@@ -9,9 +9,9 @@ struct Node<T> {
     next: Link<T>,
 }
 
-impl<T> List<T> {
+impl<T> Stack<T> {
     pub fn new() -> Self {
-        List { head: None }
+        Stack { head: None }
     }
 
     pub fn push(&mut self, elem: T) {
@@ -55,7 +55,7 @@ impl<T> List<T> {
     }
 }
 
-impl<T> Drop for List<T> {
+impl<T> Drop for Stack<T> {
     fn drop(&mut self) {
         let mut cur_link = self.head.take();
         while let Some(mut boxed_node) = cur_link {
@@ -64,7 +64,7 @@ impl<T> Drop for List<T> {
     }
 }
 
-pub struct IntoIter<T>(List<T>);
+pub struct IntoIter<T>(Stack<T>);
 
 impl<T> Iterator for IntoIter<T> {
     type Item = T;
@@ -105,63 +105,63 @@ impl<'a, T> Iterator for IterMut<'a, T> {
 
 #[cfg(test)]
 mod test {
-    use super::List;
+    use super::Stack;
 
     #[test]
     fn basics() {
-        let mut list = List::new();
+        let mut stack = Stack::new();
 
-        // Check empty list behaves right
-        assert_eq!(list.pop(), None);
+        // Check empty stack behaves right
+        assert_eq!(stack.pop(), None);
 
-        // Populate list
-        list.push(1);
-        list.push(2);
-        list.push(3);
+        // Populate stack
+        stack.push(1);
+        stack.push(2);
+        stack.push(3);
 
         // Check normal removal
-        assert_eq!(list.pop(), Some(3));
-        assert_eq!(list.pop(), Some(2));
+        assert_eq!(stack.pop(), Some(3));
+        assert_eq!(stack.pop(), Some(2));
 
         // Push some more just to make sure nothing's corrupted
-        list.push(4);
-        list.push(5);
+        stack.push(4);
+        stack.push(5);
 
         // Check normal removal
-        assert_eq!(list.pop(), Some(5));
-        assert_eq!(list.pop(), Some(4));
+        assert_eq!(stack.pop(), Some(5));
+        assert_eq!(stack.pop(), Some(4));
 
         // Check exhaustion
-        assert_eq!(list.pop(), Some(1));
-        assert_eq!(list.pop(), None);
+        assert_eq!(stack.pop(), Some(1));
+        assert_eq!(stack.pop(), None);
     }
 
     #[test]
     fn peek() {
-        let mut list = List::new();
-        assert_eq!(list.peek(), None);
-        assert_eq!(list.peek_mut(), None);
-        list.push(1);
-        list.push(2);
-        list.push(3);
+        let mut stack = Stack::new();
+        assert_eq!(stack.peek(), None);
+        assert_eq!(stack.peek_mut(), None);
+        stack.push(1);
+        stack.push(2);
+        stack.push(3);
 
-        assert_eq!(list.peek(), Some(&3));
-        assert_eq!(list.peek_mut(), Some(&mut 3));
+        assert_eq!(stack.peek(), Some(&3));
+        assert_eq!(stack.peek_mut(), Some(&mut 3));
 
-        list.peek_mut().map(|value| *value = 42);
+        stack.peek_mut().map(|value| *value = 42);
 
-        assert_eq!(list.peek(), Some(&42));
-        assert_eq!(list.pop(), Some(42));
+        assert_eq!(stack.peek(), Some(&42));
+        assert_eq!(stack.pop(), Some(42));
     }
 
     #[test]
     fn into_iter() {
-        let mut list = List::new();
-        list.push(1);
-        list.push(2);
-        list.push(3);
+        let mut stack = Stack::new();
+        stack.push(1);
+        stack.push(2);
+        stack.push(3);
 
-        let mut iter = list.into_iter();
+        let mut iter = stack.into_iter();
         assert_eq!(iter.next(), Some(3));
         assert_eq!(iter.next(), Some(2));
         assert_eq!(iter.next(), Some(1));
@@ -170,12 +170,12 @@ mod test {
 
     #[test]
     fn iter() {
-        let mut list = List::new();
-        list.push(1);
-        list.push(2);
-        list.push(3);
+        let mut stack = Stack::new();
+        stack.push(1);
+        stack.push(2);
+        stack.push(3);
 
-        let mut iter = list.iter();
+        let mut iter = stack.iter();
         assert_eq!(iter.next(), Some(&3));
         assert_eq!(iter.next(), Some(&2));
         assert_eq!(iter.next(), Some(&1));
@@ -183,12 +183,12 @@ mod test {
 
     #[test]
     fn iter_mut() {
-        let mut list = List::new();
-        list.push(1);
-        list.push(2);
-        list.push(3);
+        let mut stack = Stack::new();
+        stack.push(1);
+        stack.push(2);
+        stack.push(3);
 
-        let mut iter = list.iter_mut();
+        let mut iter = stack.iter_mut();
         assert_eq!(iter.next(), Some(&mut 3));
         assert_eq!(iter.next(), Some(&mut 2));
         assert_eq!(iter.next(), Some(&mut 1));

@@ -1,3 +1,5 @@
+// A list-based stack
+
 #include <stdio.h>
 #include <stdlib.h>
 

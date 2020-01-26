@@ -1,3 +1,5 @@
+// An array-based stack
+
 #include <stdio.h>
 #include <stdlib.h>
 
