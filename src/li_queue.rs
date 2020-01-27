@@ -60,31 +60,31 @@ impl<T> Queue<T> {
         self.head.as_mut().map(|node| &mut node.elem)
     }
 
-    pub fn into_iter(self) -> IntoIter<T> {
-        IntoIter(self)
+    pub fn into_iter(mut self) -> impl Iterator<Item = T> {
+        std::iter::from_fn(move || self.pop())
     }
 
-    pub fn iter(&self) -> Iter<'_, T> {
-        Iter {
-            next: self.head.as_ref().map(|node| &**node),
-        }
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        let mut next = self.head.as_ref().map(|node| &**node);
+
+        std::iter::from_fn(move || {
+            next.map(|node| {
+                next = node.next.as_ref().map(|node| &**node);
+                &node.elem
+            })
+        })
     }
 
-    pub fn iter_mut(&mut self) -> IterMut<'_, T> {
-        IterMut {
-            next: self.head.as_mut().map(|node| &mut **node),
-        }
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        let mut next = self.head.as_mut().map(|node| &mut **node);
+
+        std::iter::from_fn(move || {
+            next.take().map(|node| {
+                next = node.next.as_mut().map(|node| &mut **node);
+                &mut node.elem
+            })
+        })
     }
-}
-
-pub struct IntoIter<T>(Queue<T>);
-
-pub struct Iter<'a, T> {
-    next: Option<&'a Node<T>>,
-}
-
-pub struct IterMut<'a, T> {
-    next: Option<&'a mut Node<T>>,
 }
 
 impl<T> Drop for Queue<T> {
@@ -93,35 +93,6 @@ impl<T> Drop for Queue<T> {
         while let Some(mut boxed_node) = cur_link {
             cur_link = boxed_node.next.take();
         }
-    }
-}
-
-impl<T> Iterator for IntoIter<T> {
-    type Item = T;
-    fn next(&mut self) -> Option<Self::Item> {
-        self.0.pop()
-    }
-}
-
-impl<'a, T> Iterator for Iter<'a, T> {
-    type Item = &'a T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next.map(|node| {
-            self.next = node.next.as_ref().map(|node| &**node);
-            &node.elem
-        })
-    }
-}
-
-impl<'a, T> Iterator for IterMut<'a, T> {
-    type Item = &'a mut T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next.take().map(|node| {
-            self.next = node.next.as_mut().map(|node| &mut **node);
-            &mut node.elem
-        })
     }
 }
 
