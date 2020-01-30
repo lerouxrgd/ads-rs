@@ -1,159 +1,122 @@
 //! A cyclic list-based queue
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::alloc::{alloc, Layout};
+use std::ptr;
 
 pub struct Queue<T> {
-    entry: NodePtr<T>,
+    entry: *mut Node<T>,
 }
 
 struct Node<T> {
     val: Option<T>,
-    next: Option<NodePtr<T>>,
-}
-
-struct NodePtr<T>(Rc<RefCell<Node<T>>>);
-
-impl<T> NodePtr<T> {
-    fn new(node: Node<T>) -> NodePtr<T> {
-        NodePtr(Rc::new(RefCell::new(node)))
-    }
-
-    fn next(&self) -> NodePtr<T> {
-        self.0.borrow().next.as_ref().expect("no next").clone()
-    }
-
-    fn set_next(&mut self, next: NodePtr<T>) {
-        self.0.borrow_mut().next = Some(next);
-    }
-
-    fn take_next(&mut self) -> Option<NodePtr<T>> {
-        self.0.borrow_mut().next.take()
-    }
-
-    fn take_val(&mut self) -> Option<T> {
-        self.0.borrow_mut().val.take()
-    }
-
-    fn map_val<R>(&self, f: impl Fn(&T) -> R) -> Option<R> {
-        match self.0.borrow().val.as_ref() {
-            Some(val) => Some(f(val)),
-            None => None,
-        }
-    }
-
-    fn update_val(&mut self, f: impl Fn(&mut T)) -> Option<()> {
-        match self.0.borrow_mut().val.as_mut() {
-            Some(val) => Some(f(val)),
-            None => None,
-        }
-    }
-}
-
-impl<T> Clone for NodePtr<T> {
-    fn clone(&self) -> Self {
-        NodePtr(self.0.clone())
-    }
-}
-
-impl<T> std::ops::Deref for NodePtr<T> {
-    type Target = Rc<RefCell<Node<T>>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> PartialEq for NodePtr<T> {
-    fn eq(&self, other: &Self) -> bool {
-        Rc::ptr_eq(&self.0, &other.0)
-    }
+    next: *mut Node<T>,
 }
 
 impl<T> Queue<T> {
     pub fn new() -> Self {
-        let mut entry = NodePtr::new(Node {
-            val: None,
-            next: None,
-        });
+        unsafe {
+            let entry = alloc(Layout::new::<Node<T>>()) as *mut Node<T>;
+            *entry = Node {
+                val: None,
+                next: ptr::null_mut(),
+            };
 
-        let mut placeholder = NodePtr::new(Node {
-            val: None,
-            next: None,
-        });
+            let placeholder = alloc(Layout::new::<Node<T>>()) as *mut Node<T>;
+            *placeholder = Node {
+                val: None,
+                next: ptr::null_mut(),
+            };
 
-        entry.set_next(placeholder.clone());
-        placeholder.set_next(placeholder.clone());
+            (*entry).next = placeholder;
+            (*placeholder).next = placeholder;
 
-        Queue { entry }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.entry.next() == self.entry.next().next()
-    }
-
-    pub fn push(&mut self, val: T) {
-        let mut new_node = NodePtr::new(Node {
-            val: Some(val),
-            next: None,
-        });
-
-        let mut tmp = self.entry.next();
-        self.entry.set_next(new_node.clone());
-        new_node.set_next(tmp.next());
-        tmp.set_next(new_node.clone());
-    }
-
-    pub fn pop(&mut self) -> Option<T> {
-        if self.is_empty() {
-            None
-        } else {
-            let mut tmp = self.entry.next().next().next();
-            self.entry.next().next().set_next(tmp.next());
-            if tmp == self.entry.next() {
-                self.entry.set_next(tmp.next());
-            }
-            tmp.take_val()
+            Queue { entry }
         }
     }
 
-    pub fn peek_map<R>(&self, f: impl Fn(&T) -> R) -> Option<R> {
-        self.entry.next().next().next().map_val(f)
+    pub fn is_empty(&self) -> bool {
+        unsafe { (*self.entry).next == (*(*self.entry).next).next }
     }
 
-    pub fn peek_update(&mut self, f: impl Fn(&mut T)) -> Option<()> {
-        self.entry.next().next().next().update_val(f)
+    pub fn push(&mut self, val: T) {
+        unsafe {
+            let new_node = alloc(Layout::new::<Node<T>>()) as *mut Node<T>;
+            *new_node = Node {
+                val: Some(val),
+                next: ptr::null_mut(),
+            };
+
+            let mut tmp = (*self.entry).next;
+            (*self.entry).next = new_node;
+            (*new_node).next = (*tmp).next;
+            (*tmp).next = new_node;
+        }
+    }
+
+    pub fn pop(&mut self) -> Option<T> {
+        unsafe {
+            if self.is_empty() {
+                None
+            } else {
+                let tmp = (*(*(*self.entry).next).next).next;
+                (*(*(*self.entry).next).next).next = (*tmp).next;
+                if tmp == (*self.entry).next {
+                    (*self.entry).next = (*tmp).next;
+                }
+                (*tmp).val.take()
+            }
+        }
+    }
+
+    pub fn peek(&self) -> Option<&T> {
+        unsafe { (*(*(*(*self.entry).next).next).next).val.as_ref() }
+    }
+
+    pub fn peek_mut(&mut self) -> Option<&mut T> {
+        unsafe { (*(*(*(*self.entry).next).next).next).val.as_mut() }
     }
 
     pub fn into_iter(mut self) -> impl Iterator<Item = T> {
         std::iter::from_fn(move || self.pop())
     }
 
-    pub fn iter_map<R>(&self, f: impl Fn(&T) -> R) -> impl Iterator<Item = R> {
-        let mut cur_ptr = self.entry.next().next().next();
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        unsafe {
+            let mut cur = (*(*(*self.entry).next).next).next;
 
-        std::iter::from_fn(move || {
-            let res = cur_ptr.map_val(&f);
-            cur_ptr = cur_ptr.next();
-            res
-        })
+            std::iter::from_fn(move || {
+                let res = (*cur).val.as_ref();
+                cur = (*cur).next;
+                res
+            })
+        }
     }
 
-    pub fn for_each(&mut self, f: impl Fn(&mut T)) {
-        let mut cur_ptr = self.entry.next().next().next();
-        while let Some(()) = cur_ptr.update_val(&f) {
-            cur_ptr = cur_ptr.next();
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        unsafe {
+            let mut cur = (*(*(*self.entry).next).next).next;
+
+            std::iter::from_fn(move || {
+                let res = (*cur).val.as_mut();
+                cur = (*cur).next;
+                res
+            })
         }
     }
 }
 
 impl<T> Drop for Queue<T> {
     fn drop(&mut self) {
-        let mut cur_ptr = self.entry.next().next();
-        while let Some(next) = cur_ptr.take_next() {
-            cur_ptr = next;
+        unsafe {
+            let mut tmp = (*(*self.entry).next).next;
+            while tmp != (*self.entry).next {
+                (*(*self.entry).next).next = (*tmp).next;
+                ptr::drop_in_place(tmp);
+                tmp = (*(*self.entry).next).next;
+            }
+            ptr::drop_in_place((*self.entry).next);
+            ptr::drop_in_place(self.entry);
         }
-        self.entry.take_next().expect("unreachable");
     }
 }
 
@@ -192,17 +155,11 @@ mod test {
         // Check the exhaustion case fixed the pointer right
         queue.push(6);
         queue.push(7);
-        queue.push(8);
 
-        // Check normal removal and peeking
+        // Check normal removal
         assert_eq!(queue.pop(), Some(6));
-        assert_eq!(queue.peek_map(|val| *val + 1), Some(8));
-        assert_eq!(queue.peek_update(|val| *val = *val + 1), Some(()));
-        assert_eq!(queue.pop(), Some(8));
-        assert_eq!(queue.pop(), Some(8));
+        assert_eq!(queue.pop(), Some(7));
         assert_eq!(queue.pop(), None);
-        assert_eq!(queue.peek_map(|val| *val + 1), None);
-        assert_eq!(queue.peek_update(|val| *val = *val + 1), None);
     }
 
     #[test]
@@ -220,31 +177,30 @@ mod test {
     }
 
     #[test]
-    fn iter_map() {
+    fn iter() {
         let mut queue = Queue::new();
         queue.push(1);
         queue.push(2);
         queue.push(3);
 
-        let mut iter = queue.iter_map(|v| *v);
-        assert_eq!(iter.next(), Some(1));
-        assert_eq!(iter.next(), Some(2));
-        assert_eq!(iter.next(), Some(3));
+        let mut iter = queue.iter();
+        assert_eq!(iter.next(), Some(&1));
+        assert_eq!(iter.next(), Some(&2));
+        assert_eq!(iter.next(), Some(&3));
         assert_eq!(iter.next(), None);
     }
 
     #[test]
-    fn for_each() {
+    fn iter_mut() {
         let mut queue = Queue::new();
         queue.push(1);
         queue.push(2);
         queue.push(3);
 
-        queue.for_each(|v| *v = *v + 1);
-        let mut iter = queue.into_iter();
-        assert_eq!(iter.next(), Some(2));
-        assert_eq!(iter.next(), Some(3));
-        assert_eq!(iter.next(), Some(4));
+        let mut iter = queue.iter_mut();
+        assert_eq!(iter.next(), Some(&mut 1));
+        assert_eq!(iter.next(), Some(&mut 2));
+        assert_eq!(iter.next(), Some(&mut 3));
         assert_eq!(iter.next(), None);
     }
 }
