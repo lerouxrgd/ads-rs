@@ -45,22 +45,22 @@ impl<T> Stack<T> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
-        let mut next = self.head.as_ref().map(|node| &**node);
+        let mut next = self.head.as_deref();
 
         std::iter::from_fn(move || {
             next.map(|node| {
-                next = node.next.as_ref().map(|node| &**node);
+                next = node.next.as_deref();
                 &node.elem
             })
         })
     }
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        let mut next = self.head.as_mut().map(|node| &mut **node);
+        let mut next = self.head.as_deref_mut();
 
         std::iter::from_fn(move || {
             next.take().map(|node| {
-                next = node.next.as_mut().map(|node| &mut **node);
+                next = node.next.as_deref_mut();
                 &mut node.elem
             })
         })
