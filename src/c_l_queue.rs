@@ -20,30 +20,30 @@ impl<T> NodePtr<T> {
     }
 
     fn next(&self) -> NodePtr<T> {
-        (*self.0.borrow()).next.as_ref().expect("no next").clone()
+        self.0.borrow().next.as_ref().expect("no next").clone()
     }
 
     fn set_next(&mut self, next: NodePtr<T>) {
-        (*self.0.borrow_mut()).next = Some(next);
+        self.0.borrow_mut().next = Some(next);
     }
 
     fn take_next(&mut self) -> Option<NodePtr<T>> {
-        (*self.0.borrow_mut()).next.take()
+        self.0.borrow_mut().next.take()
     }
 
     fn take_val(&mut self) -> Option<T> {
-        (*self.0.borrow_mut()).val.take()
+        self.0.borrow_mut().val.take()
     }
 
     fn map_val<R>(&self, f: impl Fn(&T) -> R) -> Option<R> {
-        match (*self.0.borrow()).val.as_ref() {
+        match self.0.borrow().val.as_ref() {
             Some(val) => Some(f(val)),
             None => None,
         }
     }
 
     fn update_val(&mut self, f: impl Fn(&mut T)) -> Option<()> {
-        match (*self.0.borrow_mut()).val.as_mut() {
+        match self.0.borrow_mut().val.as_mut() {
             Some(val) => Some(f(val)),
             None => None,
         }
@@ -53,6 +53,14 @@ impl<T> NodePtr<T> {
 impl<T> Clone for NodePtr<T> {
     fn clone(&self) -> Self {
         NodePtr(self.0.clone())
+    }
+}
+
+impl<T> std::ops::Deref for NodePtr<T> {
+    type Target = Rc<RefCell<Node<T>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
