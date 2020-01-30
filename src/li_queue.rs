@@ -1,3 +1,5 @@
+//! A list-based queue
+
 use std::ptr;
 
 pub struct Queue<T> {

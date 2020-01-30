@@ -1,3 +1,5 @@
+// A list-based strack
+
 pub struct Stack<T> {
     head: Link<T>,
 }
