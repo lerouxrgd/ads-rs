@@ -8,11 +8,9 @@ pub struct Queue<T> {
 }
 
 struct Node<T> {
-    elem: Option<T>,
-    next: Link<T>,
+    val: Option<T>,
+    next: Option<NodePtr<T>>,
 }
-
-type Link<T> = Option<NodePtr<T>>;
 
 struct NodePtr<T>(Rc<RefCell<Node<T>>>);
 
@@ -34,19 +32,19 @@ impl<T> NodePtr<T> {
     }
 
     fn take_val(&mut self) -> Option<T> {
-        (*self.0.borrow_mut()).elem.take()
+        (*self.0.borrow_mut()).val.take()
     }
 
     fn map_val<R>(&self, f: impl Fn(&T) -> R) -> Option<R> {
-        match (*self.0.borrow()).elem.as_ref() {
-            Some(elem) => Some(f(elem)),
+        match (*self.0.borrow()).val.as_ref() {
+            Some(val) => Some(f(val)),
             None => None,
         }
     }
 
-    fn update_val(&self, f: impl Fn(&mut T)) -> Option<()> {
-        match (*self.0.borrow_mut()).elem.as_mut() {
-            Some(elem) => Some(f(elem)),
+    fn update_val(&mut self, f: impl Fn(&mut T)) -> Option<()> {
+        match (*self.0.borrow_mut()).val.as_mut() {
+            Some(val) => Some(f(val)),
             None => None,
         }
     }
@@ -67,12 +65,12 @@ impl<T> PartialEq for NodePtr<T> {
 impl<T> Queue<T> {
     pub fn new() -> Self {
         let mut entry = NodePtr::new(Node {
-            elem: None,
+            val: None,
             next: None,
         });
 
         let mut placeholder = NodePtr::new(Node {
-            elem: None,
+            val: None,
             next: None,
         });
 
@@ -86,9 +84,9 @@ impl<T> Queue<T> {
         self.entry.next() == self.entry.next().next()
     }
 
-    pub fn push(&mut self, elem: T) {
+    pub fn push(&mut self, val: T) {
         let mut new_node = NodePtr::new(Node {
-            elem: Some(elem),
+            val: Some(val),
             next: None,
         });
 
@@ -115,7 +113,7 @@ impl<T> Queue<T> {
         self.entry.next().next().next().map_val(f)
     }
 
-    pub fn peek_update(&self, f: impl Fn(&mut T)) -> Option<()> {
+    pub fn peek_update(&mut self, f: impl Fn(&mut T)) -> Option<()> {
         self.entry.next().next().next().update_val(f)
     }
 
@@ -124,28 +122,28 @@ impl<T> Queue<T> {
     }
 
     pub fn iter_map<R>(&self, f: impl Fn(&T) -> R) -> impl Iterator<Item = R> {
-        let mut next = self.entry.next().next().next();
+        let mut cur_ptr = self.entry.next().next().next();
 
         std::iter::from_fn(move || {
-            let res = next.map_val(&f);
-            next = next.next();
+            let res = cur_ptr.map_val(&f);
+            cur_ptr = cur_ptr.next();
             res
         })
     }
 
     pub fn for_each(&mut self, f: impl Fn(&mut T)) {
-        let mut next = self.entry.next().next().next();
-        while let Some(()) = next.update_val(&f) {
-            next = next.next();
+        let mut cur_ptr = self.entry.next().next().next();
+        while let Some(()) = cur_ptr.update_val(&f) {
+            cur_ptr = cur_ptr.next();
         }
     }
 }
 
 impl<T> Drop for Queue<T> {
     fn drop(&mut self) {
-        let mut tmp = self.entry.next().next();
-        while let Some(next) = tmp.take_next() {
-            tmp = next;
+        let mut cur_ptr = self.entry.next().next();
+        while let Some(next) = cur_ptr.take_next() {
+            cur_ptr = next;
         }
         self.entry.take_next().expect("unreachable");
     }
