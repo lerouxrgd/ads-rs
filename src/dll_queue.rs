@@ -103,13 +103,15 @@ impl<T> Queue<T> {
 impl<T> Drop for Queue<T> {
     fn drop(&mut self) {
         unsafe {
-            while {
-                (*self.entry).prev = ptr::null_mut();
+            (*(*self.entry).prev).next = ptr::null_mut();
+            loop {
                 let tmp = (*self.entry).next;
                 ptr::drop_in_place(self.entry);
                 self.entry = tmp;
-                self.entry.is_null()
-            } {}
+                if self.entry.is_null() {
+                    break;
+                }
+            }
         }
     }
 }
