@@ -24,7 +24,7 @@ impl<T> Queue<T> {
             };
 
             (*entry).next = entry;
-            (*entry).next = entry;
+            (*entry).prev = entry;
 
             Queue { entry }
         }
