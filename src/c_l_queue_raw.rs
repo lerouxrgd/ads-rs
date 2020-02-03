@@ -1,59 +1,55 @@
 //! A cyclic list-based queue
 
-use std::ptr::NonNull;
+use std::alloc::{alloc, Layout};
+use std::ptr;
 
 pub struct Queue<T> {
-    entry: NonNull<Node<T>>,
-    marker: std::marker::PhantomData<Box<Node<T>>>, // For the drop checker
+    entry: *mut Node<T>,
 }
 
 struct Node<T> {
     val: Option<T>,
-    next: NonNull<Node<T>>,
+    next: *mut Node<T>,
 }
 
 impl<T> Queue<T> {
     pub fn new() -> Self {
         unsafe {
-            let entry = Box::new(Node {
+            let entry = alloc(Layout::new::<Node<T>>()) as *mut Node<T>;
+            *entry = Node {
                 val: None,
-                next: NonNull::dangling(),
-            });
+                next: ptr::null_mut(),
+            };
 
-            let placeholder = Box::new(Node {
+            let placeholder = alloc(Layout::new::<Node<T>>()) as *mut Node<T>;
+            *placeholder = Node {
                 val: None,
-                next: NonNull::dangling(),
-            });
+                next: ptr::null_mut(),
+            };
 
-            let mut placeholder = NonNull::new_unchecked(Box::into_raw(placeholder));
-            placeholder.as_mut().next = placeholder;
+            (*entry).next = placeholder;
+            (*placeholder).next = placeholder;
 
-            let mut entry = NonNull::new_unchecked(Box::into_raw(entry));
-            entry.as_mut().next = placeholder;
-
-            Queue {
-                entry,
-                marker: std::marker::PhantomData,
-            }
+            Queue { entry }
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        unsafe { self.entry.as_ref().next == self.entry.as_ref().next.as_ref().next }
+        unsafe { (*self.entry).next == (*(*self.entry).next).next }
     }
 
     pub fn push(&mut self, val: T) {
         unsafe {
-            let new_node = Box::new(Node {
+            let new_node = alloc(Layout::new::<Node<T>>()) as *mut Node<T>;
+            *new_node = Node {
                 val: Some(val),
-                next: NonNull::dangling(),
-            });
-            let mut new_node = NonNull::new_unchecked(Box::into_raw(new_node));
+                next: ptr::null_mut(),
+            };
 
-            let mut tmp = self.entry.as_mut().next;
-            self.entry.as_mut().next = new_node;
-            new_node.as_mut().next = tmp.as_ref().next;
-            tmp.as_mut().next = new_node;
+            let mut tmp = (*self.entry).next;
+            (*self.entry).next = new_node;
+            (*new_node).next = (*tmp).next;
+            (*tmp).next = new_node;
         }
     }
 
@@ -62,44 +58,22 @@ impl<T> Queue<T> {
             if self.is_empty() {
                 None
             } else {
-                let mut tmp = self.entry.as_mut().next.as_mut().next.as_mut().next;
-                self.entry.as_mut().next.as_mut().next.as_mut().next = tmp.as_ref().next;
-                if tmp == self.entry.as_ref().next {
-                    self.entry.as_mut().next = tmp.as_ref().next;
+                let tmp = (*(*(*self.entry).next).next).next;
+                (*(*(*self.entry).next).next).next = (*tmp).next;
+                if tmp == (*self.entry).next {
+                    (*self.entry).next = (*tmp).next;
                 }
-                tmp.as_mut().val.take()
+                (*tmp).val.take()
             }
         }
     }
 
     pub fn peek(&self) -> Option<&T> {
-        unsafe {
-            self.entry
-                .as_ref()
-                .next
-                .as_ref()
-                .next
-                .as_ref()
-                .next
-                .as_ref()
-                .val
-                .as_ref()
-        }
+        unsafe { (*(*(*(*self.entry).next).next).next).val.as_ref() }
     }
 
     pub fn peek_mut(&mut self) -> Option<&mut T> {
-        unsafe {
-            self.entry
-                .as_mut()
-                .next
-                .as_mut()
-                .next
-                .as_mut()
-                .next
-                .as_mut()
-                .val
-                .as_mut()
-        }
+        unsafe { (*(*(*(*self.entry).next).next).next).val.as_mut() }
     }
 
     pub fn into_iter(mut self) -> impl Iterator<Item = T> {
@@ -108,11 +82,11 @@ impl<T> Queue<T> {
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         unsafe {
-            let mut cur = self.entry.as_ref().next.as_ref().next.as_ref().next;
+            let mut cur = (*(*(*self.entry).next).next).next;
 
             std::iter::from_fn(move || {
-                let res = (&*cur.as_ptr()).val.as_ref();
-                cur = cur.as_ref().next;
+                let res = (*cur).val.as_ref();
+                cur = (*cur).next;
                 res
             })
         }
@@ -120,11 +94,11 @@ impl<T> Queue<T> {
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         unsafe {
-            let mut cur = self.entry.as_mut().next.as_mut().next.as_mut().next;
+            let mut cur = (*(*(*self.entry).next).next).next;
 
             std::iter::from_fn(move || {
-                let res = (&mut *cur.as_ptr()).val.as_mut();
-                cur = cur.as_mut().next;
+                let res = (*cur).val.as_mut();
+                cur = (*cur).next;
                 res
             })
         }
@@ -134,14 +108,14 @@ impl<T> Queue<T> {
 impl<T> Drop for Queue<T> {
     fn drop(&mut self) {
         unsafe {
-            let mut tmp = self.entry.as_mut().next.as_mut().next;
-            while tmp != self.entry.as_ref().next {
-                self.entry.as_mut().next.as_mut().next = tmp.as_mut().next;
-                drop(tmp);
-                tmp = self.entry.as_mut().next.as_mut().next;
+            let mut tmp = (*(*self.entry).next).next;
+            while tmp != (*self.entry).next {
+                (*(*self.entry).next).next = (*tmp).next;
+                ptr::drop_in_place(tmp);
+                tmp = (*(*self.entry).next).next;
             }
-            drop(self.entry.as_mut());
-            drop(self.entry);
+            ptr::drop_in_place((*self.entry).next);
+            ptr::drop_in_place(self.entry);
         }
     }
 }

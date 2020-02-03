@@ -15,34 +15,34 @@ struct Node<T> {
 struct NodePtr<T>(Rc<RefCell<Node<T>>>);
 
 impl<T> NodePtr<T> {
-    fn new(node: Node<T>) -> NodePtr<T> {
+    pub fn new(node: Node<T>) -> NodePtr<T> {
         NodePtr(Rc::new(RefCell::new(node)))
     }
 
-    fn next(&self) -> NodePtr<T> {
+    pub fn next(&self) -> NodePtr<T> {
         self.0.borrow().next.as_ref().expect("no next").clone()
     }
 
-    fn set_next(&mut self, next: NodePtr<T>) {
+    pub fn set_next(&mut self, next: NodePtr<T>) {
         self.0.borrow_mut().next = Some(next);
     }
 
-    fn take_next(&mut self) -> Option<NodePtr<T>> {
+    pub fn take_next(&mut self) -> Option<NodePtr<T>> {
         self.0.borrow_mut().next.take()
     }
 
-    fn take_val(&mut self) -> Option<T> {
+    pub fn take_val(&mut self) -> Option<T> {
         self.0.borrow_mut().val.take()
     }
 
-    fn map_val<R>(&self, f: impl Fn(&T) -> R) -> Option<R> {
+    pub fn map_val<R>(&self, f: impl Fn(&T) -> R) -> Option<R> {
         match self.0.borrow().val.as_ref() {
             Some(val) => Some(f(val)),
             None => None,
         }
     }
 
-    fn update_val(&mut self, f: impl Fn(&mut T)) -> Option<()> {
+    pub fn update_val(&mut self, f: impl Fn(&mut T)) -> Option<()> {
         match self.0.borrow_mut().val.as_mut() {
             Some(val) => Some(f(val)),
             None => None,
