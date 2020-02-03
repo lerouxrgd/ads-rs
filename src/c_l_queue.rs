@@ -4,7 +4,7 @@ use std::ptr::NonNull;
 
 pub struct Queue<T> {
     entry: NonNull<Node<T>>,
-    marker: std::marker::PhantomData<Box<Node<T>>>, // For the drop checker
+    marker: std::marker::PhantomData<Box<Node<T>>>,
 }
 
 struct Node<T> {

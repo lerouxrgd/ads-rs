@@ -1,55 +1,52 @@
 //! A doubly linked list-based queue
 
-use std::ptr::NonNull;
+use std::alloc::{alloc, Layout};
+use std::ptr;
 
 pub struct Queue<T> {
-    entry: NonNull<Node<T>>,
-    marker: std::marker::PhantomData<Box<Node<T>>>,
+    entry: *mut Node<T>,
 }
 
 struct Node<T> {
     val: Option<T>,
-    next: NonNull<Node<T>>,
-    prev: NonNull<Node<T>>,
+    next: *mut Node<T>,
+    prev: *mut Node<T>,
 }
 
 impl<T> Queue<T> {
     pub fn new() -> Self {
         unsafe {
-            let entry = Box::new(Node {
+            let entry = alloc(Layout::new::<Node<T>>()) as *mut Node<T>;
+            *entry = Node {
                 val: None,
-                next: NonNull::dangling(),
-                prev: NonNull::dangling(),
-            });
-            let mut entry = NonNull::new_unchecked(Box::into_raw(entry));
+                next: ptr::null_mut(),
+                prev: ptr::null_mut(),
+            };
 
-            entry.as_mut().next = entry;
-            entry.as_mut().prev = entry;
+            (*entry).next = entry;
+            (*entry).prev = entry;
 
-            Queue {
-                entry,
-                marker: std::marker::PhantomData,
-            }
+            Queue { entry }
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        unsafe { self.entry.as_ref().next == self.entry }
+        unsafe { (*self.entry).next == self.entry }
     }
 
     pub fn push(&mut self, val: T) {
         unsafe {
-            let new_node = Box::new(Node {
+            let new_node = alloc(Layout::new::<Node<T>>()) as *mut Node<T>;
+            *new_node = Node {
                 val: Some(val),
-                next: NonNull::dangling(),
-                prev: NonNull::dangling(),
-            });
-            let mut new_node = NonNull::new_unchecked(Box::into_raw(new_node));
+                next: ptr::null_mut(),
+                prev: ptr::null_mut(),
+            };
 
-            new_node.as_mut().next = self.entry.as_ref().next;
-            self.entry.as_mut().next = new_node;
-            new_node.as_mut().next.as_mut().prev = new_node;
-            new_node.as_mut().prev = self.entry;
+            (*new_node).next = (*self.entry).next;
+            (*self.entry).next = new_node;
+            (*(*new_node).next).prev = new_node;
+            (*new_node).prev = self.entry;
         }
     }
 
@@ -58,20 +55,20 @@ impl<T> Queue<T> {
             if self.is_empty() {
                 None
             } else {
-                let mut tmp = self.entry.as_ref().prev;
-                tmp.as_mut().prev.as_mut().next = self.entry;
-                self.entry.as_mut().prev = tmp.as_ref().prev;
-                tmp.as_mut().val.take()
+                let tmp = (*self.entry).prev;
+                (*(*tmp).prev).next = self.entry;
+                (*self.entry).prev = (*tmp).prev;
+                (*tmp).val.take()
             }
         }
     }
 
     pub fn peek(&self) -> Option<&T> {
-        unsafe { self.entry.as_ref().prev.as_ref().val.as_ref() }
+        unsafe { (*(*self.entry).prev).val.as_ref() }
     }
 
     pub fn peek_mut(&mut self) -> Option<&mut T> {
-        unsafe { self.entry.as_mut().prev.as_mut().val.as_mut() }
+        unsafe { (*(*self.entry).prev).val.as_mut() }
     }
 
     pub fn into_iter(mut self) -> impl Iterator<Item = T> {
@@ -80,11 +77,11 @@ impl<T> Queue<T> {
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         unsafe {
-            let mut cur = self.entry.as_ref().prev;
+            let mut cur = (*self.entry).prev;
 
             std::iter::from_fn(move || {
-                let res = (&*cur.as_ptr()).val.as_ref();
-                cur = cur.as_ref().prev;
+                let res = (*cur).val.as_ref();
+                cur = (*cur).prev;
                 res
             })
         }
@@ -92,11 +89,11 @@ impl<T> Queue<T> {
 
     pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
         unsafe {
-            let mut cur = self.entry.as_mut().prev;
+            let mut cur = (*self.entry).prev;
 
             std::iter::from_fn(move || {
-                let res = (&mut *cur.as_ptr()).val.as_mut();
-                cur = cur.as_mut().prev;
+                let res = (*cur).val.as_mut();
+                cur = (*cur).prev;
                 res
             })
         }
@@ -106,13 +103,12 @@ impl<T> Queue<T> {
 impl<T> Drop for Queue<T> {
     fn drop(&mut self) {
         unsafe {
-            let dangling = NonNull::dangling();
-            self.entry.as_mut().prev.as_mut().next = dangling;
+            (*(*self.entry).prev).next = ptr::null_mut();
             loop {
-                let tmp = self.entry.as_ref().next;
-                drop(self.entry);
+                let tmp = (*self.entry).next;
+                ptr::drop_in_place(self.entry);
                 self.entry = tmp;
-                if self.entry == dangling {
+                if self.entry.is_null() {
                     break;
                 }
             }
