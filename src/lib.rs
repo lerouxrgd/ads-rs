@@ -6,3 +6,5 @@ pub mod dll_queue_raw;
 pub mod dll_queue_safe;
 pub mod li_queue;
 pub mod li_stack;
+pub mod triv_tree;
+pub mod triv_tree_raw;
