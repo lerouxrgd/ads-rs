@@ -27,13 +27,12 @@ impl<'a, K, V> TreeNode<'a, K, V>
 where
     K: ToOwned + Ord,
 {
-    pub fn new_internal(key: K) -> TreeNode<'a, K, V> {
-        todo!()
-        // TreeNode::Internal {
-        //     key,
-        //     left: None,
-        //     right: None,
-        // }
+    pub fn new_internal(
+        key: K,
+        left: Box<TreeNode<'a, K, V>>,
+        right: Box<TreeNode<'a, K, V>>,
+    ) -> TreeNode<'a, K, V> {
+        TreeNode::Internal { key, left, right }
     }
 
     pub fn new_leaf(key: Cow<K>, val: V) -> TreeNode<K, V> {
@@ -67,11 +66,11 @@ where
         SearchTree { tree: None }
     }
 
-    pub fn insert(&mut self, key: K, val: V) -> Option<V> {
+    pub fn insert(&mut self, new_key: K, new_val: V) -> Option<V> {
         if let None = &mut self.tree {
             self.tree = Some(Box::new(TreeNode::new_leaf(
-                Cow::Owned(key.to_owned()),
-                val,
+                Cow::Owned(new_key.to_owned()),
+                new_val,
             )));
             return None;
         }
@@ -83,12 +82,13 @@ where
             right,
         } = tmp_node
         {
-            if key < *tmp_key {
+            if new_key < *tmp_key {
                 tmp_node = left;
             } else {
                 tmp_node = right;
             }
         }
+
         if let TreeNode::Leaf {
             key: tmp_key,
             val: tmp_val,
@@ -100,14 +100,16 @@ where
                     todo!()
                 }
                 Cow::Borrowed(tmp_key) => {
-                    if key == **tmp_key {
-                        return Some(mem::replace(tmp_node.val_mut(), val));
+                    if new_key == **tmp_key {
+                        return Some(mem::replace(tmp_node.val_mut(), new_val));
                     }
-                    let old_leaf = TreeNode::new_leaf(Cow::Borrowed(tmp_key), tmp_val);
-                    let new_leaf = TreeNode::new_leaf(Cow::Borrowed(&key), val);
-                    if *tmp_key < new_leaf.key() {
-                        // unsafe {ptr::write(tmp_key, )}
-                        // tmp_node
+
+                    let old_leaf = TreeNode::new_leaf(Cow::Borrowed(*tmp_key), tmp_val);
+                    let new_leaf = TreeNode::new_leaf(Cow::Borrowed(&new_key), new_val);
+                    if *tmp_key < &new_key {
+                        // let new_node =
+                        //     TreeNode::new_internal(new_key, Box::new(old_leaf), Box::new(new_leaf));
+                    } else {
                     }
                 }
             }
